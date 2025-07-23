@@ -239,6 +239,17 @@ class CiesScraper:
                     if "iniciarReserva" in current_url:
                         logging.info("✅ Navegación exitosa a página de solicitud")
                         return True
+                    elif "aceptacion" in current_url:
+                        logging.warning("⚠️ Detectada página de error después del clic en Visitantes")
+                        # Manejar la página de error
+                        if self.handle_error_page():
+                            logging.info("✅ Página de error manejada exitosamente")
+                            # Intentar el clic nuevamente después de volver al inicio
+                            time.sleep(2)
+                            return self.click_visitantes_cies()  # Llamada recursiva
+                        else:
+                            logging.error("❌ No se pudo manejar la página de error")
+                            return False
                     else:
                         logging.warning(f"⚠️ Navegó a URL inesperada: {current_url}")
                         # Intentar navegar directamente a la página de solicitud
@@ -575,6 +586,66 @@ class CiesScraper:
             logging.error(f"Error al obtener plazas disponibles: {e}")
             return 0
     
+    def handle_error_page(self):
+        """Manejar página de error y volver al inicio"""
+        try:
+            # Verificar si estamos en la página de error
+            current_url = self.driver.current_url
+            if "aceptacion" not in current_url:
+                return True  # No estamos en página de error
+            
+            logging.info("🔄 Detectada página de error, buscando botón 'Ir ao inicio'...")
+            
+            # Buscar el botón "Ir ao inicio"
+            ir_inicio_selectors = [
+                "//a[contains(text(), 'Ir ao inicio')]",
+                "//button[contains(text(), 'Ir ao inicio')]",
+                "//a[contains(@class, 'inicio')]",
+                "//button[contains(@class, 'inicio')]",
+                "//a[contains(@href, 'inicio')]",
+                "//*[contains(text(), 'Ir ao inicio')]"
+            ]
+            
+            ir_inicio_button = None
+            for selector in ir_inicio_selectors:
+                try:
+                    ir_inicio_button = self.driver.find_element(By.XPATH, selector)
+                    if ir_inicio_button.is_displayed():
+                        logging.info(f"Botón 'Ir ao inicio' encontrado con selector: {selector}")
+                        break
+                except:
+                    continue
+            
+            if not ir_inicio_button:
+                logging.error("❌ No se pudo encontrar el botón 'Ir ao inicio'")
+                return False
+            
+            # Hacer clic en el botón
+            try:
+                # Usar JavaScript para evitar problemas de interceptación
+                self.driver.execute_script("arguments[0].click();", ir_inicio_button)
+                logging.info("✅ Clic realizado en 'Ir ao inicio'")
+                
+                # Esperar a que la página cargue
+                time.sleep(3)
+                
+                # Verificar que estamos en la página de inicio
+                current_url = self.driver.current_url
+                if "inicio" in current_url:
+                    logging.info("✅ Regresado exitosamente a la página de inicio")
+                    return True
+                else:
+                    logging.warning(f"⚠️ URL después de clic: {current_url}")
+                    return False
+                    
+            except Exception as e:
+                logging.error(f"Error al hacer clic en 'Ir ao inicio': {e}")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error manejando página de error: {e}")
+            return False
+    
     def check_availability(self):
         """Verificar disponibilidad para la fecha objetivo"""
         try:
@@ -587,6 +658,25 @@ class CiesScraper:
             # Hacer clic en Visitantes para Islas Cíes
             if not self.click_visitantes_cies():
                 return None
+            
+            # Verificar si estamos en página de error después del clic
+            current_url = self.driver.current_url
+            if "aceptacion" in current_url:
+                logging.warning("⚠️ Detectada página de error después del clic en Visitantes")
+                if not self.handle_error_page():
+                    logging.error("❌ No se pudo manejar la página de error")
+                    return None
+                
+                # Intentar el clic nuevamente después de volver al inicio
+                time.sleep(2)
+                if not self.click_visitantes_cies():
+                    return None
+                
+                # Verificar nuevamente si estamos en página de error
+                current_url = self.driver.current_url
+                if "aceptacion" in current_url:
+                    logging.error("❌ Seguimos en página de error después del segundo intento")
+                    return None
                 
             if not self.select_target_date():
                 return None
