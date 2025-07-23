@@ -61,8 +61,13 @@ class CiesMonitor:
             # Mostrar resultado
             logging.info(f"Resultado: {result['available_slots']} plazas disponibles para {result['date']}")
             
-            # Verificar si hay disponibilidad
-            if result['has_availability']:
+            # Manejar diferentes estados
+            if result['detection_error']:
+                # Error de detección - notificar a los usuarios
+                logging.warning("⚠️ Error de detección de plazas - notificando a usuarios")
+                self.send_detection_error_alert(result)
+            elif result['has_availability']:
+                # Hay plazas disponibles
                 logging.info("🎉 ¡PLAZAS DISPONIBLES ENCONTRADAS! Enviando alertas...")
                 
                 # Enviar alertas
@@ -71,6 +76,7 @@ class CiesMonitor:
                 else:
                     logging.error("❌ Error al enviar alertas")
             else:
+                # No hay plazas disponibles
                 logging.info("😔 No hay plazas disponibles aún...")
             
             self.last_check = datetime.now()
@@ -192,6 +198,37 @@ Reinicia el bot manualmente para continuar el monitoreo.
                 
         except Exception as e:
             logging.error(f"Error al enviar alerta de error crítico: {e}")
+
+    def send_detection_error_alert(self, result):
+        """Enviar alerta de error de detección por Telegram"""
+        try:
+            error_message = f"""
+⚠️ **PROBLEMA TÉCNICO DETECTADO** ⚠️
+
+🤖 El bot de monitoreo de Islas Cíes no pudo obtener información de plazas disponibles.
+
+📅 **Fecha verificada:** {result['date']}
+⏰ **Timestamp:** {result['timestamp']}
+🔍 **Estado:** Error de detección
+
+🔄 **Acción automática:**
+El bot continuará monitoreando y se recuperará automáticamente.
+
+📊 **Detalles técnicos:**
+- Error en la detección de elementos de la página
+- Se tomaron screenshots para debugging
+- El bot seguirá funcionando normalmente
+
+🔗 Repositorio: https://github.com/sropero96/scraping-cies-bot
+            """
+            
+            if self.notifier.send_telegram_critical_alert(error_message):
+                logging.info("✅ Alerta de error de detección enviada por Telegram")
+            else:
+                logging.error("❌ Error al enviar alerta de error de detección")
+                
+        except Exception as e:
+            logging.error(f"Error al enviar alerta de error de detección: {e}")
 
 def main():
     """Función principal"""

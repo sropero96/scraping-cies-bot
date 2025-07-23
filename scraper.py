@@ -694,31 +694,118 @@ class CiesScraper:
             return False
     
     def get_available_slots(self):
-        """Obtener el número de plazas disponibles"""
+        """Obtener el número de plazas disponibles con múltiples estrategias"""
         try:
             # Verificar si estamos en página de error antes de obtener slots
             if not self.check_and_handle_error_page():
-                return 0
+                return -1  # Error de página
             
-            # Buscar el elemento que muestra las plazas libres
-            # Basándome en la imagen, parece estar en un panel derecho
-            slots_element = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//div[contains(text(), 'Prazas libres:')]"))
-            )
+            # Delay aleatorio antes de buscar slots
+            self.random_delay(1, 2)
+            
+            logging.info("🔍 Buscando información de plazas disponibles...")
+            
+            # Múltiples selectores para encontrar las plazas disponibles
+            slots_selectors = [
+                "//div[contains(text(), 'Prazas libres:')]",
+                "//div[contains(text(), 'plazas libres')]",
+                "//div[contains(text(), 'Prazas disponibles')]",
+                "//div[contains(text(), 'plazas disponibles')]",
+                "//span[contains(text(), 'Prazas libres:')]",
+                "//span[contains(text(), 'plazas libres')]",
+                "//*[contains(text(), 'Prazas libres:')]",
+                "//*[contains(text(), 'plazas libres')]",
+                "//div[contains(@class, 'slots')]//*[contains(text(), 'libres')]",
+                "//div[contains(@class, 'availability')]//*[contains(text(), 'libres')]"
+            ]
+            
+            slots_element = None
+            for selector in slots_selectors:
+                try:
+                    logging.info(f"Probando selector: {selector}")
+                    slots_element = self.driver.find_element(By.XPATH, selector)
+                    if slots_element and slots_element.is_displayed():
+                        logging.info(f"✅ Elemento de plazas encontrado con selector: {selector}")
+                        break
+                except Exception as e:
+                    logging.debug(f"Selector {selector} no encontró elementos: {e}")
+                    continue
+            
+            if not slots_element:
+                # Intentar buscar con JavaScript como fallback
+                try:
+                    logging.info("🔍 Intentando búsqueda con JavaScript...")
+                    slots_element = self.driver.execute_script("""
+                        var elements = document.querySelectorAll('*');
+                        for (var i = 0; i < elements.length; i++) {
+                            var text = elements[i].textContent || elements[i].innerText;
+                            if (text && (text.includes('Prazas libres') || text.includes('plazas libres'))) {
+                                return elements[i];
+                            }
+                        }
+                        return null;
+                    """)
+                    if slots_element:
+                        logging.info("✅ Elemento de plazas encontrado con JavaScript")
+                except Exception as e:
+                    logging.warning(f"Búsqueda con JavaScript falló: {e}")
+            
+            if not slots_element:
+                # Tomar screenshot para debugging
+                try:
+                    self.driver.save_screenshot("slots_debug.png")
+                    logging.info("📸 Screenshot guardado como 'slots_debug.png' para debugging")
+                except:
+                    pass
+                
+                logging.warning("❌ No se encontró información de plazas disponibles")
+                return -1  # Error de detección
             
             # Extraer el número de plazas
-            slots_text = slots_element.text
-            slots_number = int(slots_text.split(':')[1].strip())
+            try:
+                slots_text = slots_element.text
+                logging.info(f"Texto encontrado: '{slots_text}'")
+                
+                # Múltiples patrones para extraer el número
+                import re
+                
+                # Patrón 1: "Prazas libres: X"
+                match = re.search(r'Prazas libres:\s*(\d+)', slots_text, re.IGNORECASE)
+                if match:
+                    slots_number = int(match.group(1))
+                    logging.info(f"✅ Plazas disponibles extraídas con patrón 1: {slots_number}")
+                    return slots_number
+                
+                # Patrón 2: "plazas libres: X"
+                match = re.search(r'plazas libres:\s*(\d+)', slots_text, re.IGNORECASE)
+                if match:
+                    slots_number = int(match.group(1))
+                    logging.info(f"✅ Plazas disponibles extraídas con patrón 2: {slots_number}")
+                    return slots_number
+                
+                # Patrón 3: Buscar cualquier número en el texto
+                numbers = re.findall(r'\d+', slots_text)
+                if numbers:
+                    slots_number = int(numbers[0])
+                    logging.info(f"✅ Plazas disponibles extraídas con patrón 3: {slots_number}")
+                    return slots_number
+                
+                logging.warning(f"No se pudo extraer número de plazas del texto: '{slots_text}'")
+                return -1  # Error de extracción
+                
+            except Exception as e:
+                logging.error(f"Error al extraer número de plazas: {e}")
+                return -1  # Error de extracción
             
-            logging.info(f"Plazas disponibles: {slots_number}")
-            return slots_number
-            
-        except NoSuchElementException:
-            logging.warning("No se encontró información de plazas disponibles")
-            return 0
         except Exception as e:
             logging.error(f"Error al obtener plazas disponibles: {e}")
-            return 0
+            # Tomar screenshot en caso de error
+            try:
+                self.driver.save_screenshot("error_slots.png")
+                logging.info("📸 Screenshot de error guardado como 'error_slots.png'")
+            except:
+                pass
+            return -1  # Error general
     
     def is_error_page(self):
         """Verificar si estamos en la página de error"""
@@ -866,11 +953,30 @@ class CiesScraper:
                 
             slots = self.get_available_slots()
             
+            # Determinar el estado de disponibilidad
+            if slots == -1:
+                # Error de detección
+                has_availability = None
+                status = "error_detection"
+                logging.warning("⚠️ Error en la detección de plazas - no se pudo obtener información")
+            elif slots > 0:
+                # Hay plazas disponibles
+                has_availability = True
+                status = "available"
+                logging.info(f"🎉 ¡PLAZAS DISPONIBLES ENCONTRADAS! ({slots} plazas)")
+            else:
+                # No hay plazas disponibles (slots == 0)
+                has_availability = False
+                status = "unavailable"
+                logging.info("😔 No hay plazas disponibles")
+            
             return {
                 'date': TARGET_DATE,
                 'available_slots': slots,
                 'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'has_availability': slots > 0
+                'has_availability': has_availability,
+                'status': status,
+                'detection_error': slots == -1
             }
             
         except Exception as e:
