@@ -195,6 +195,45 @@ class Notifier:
             logging.error(f"Error al enviar resumen Telegram: {e}")
             return False
     
+    def send_telegram_critical_alert(self, error_message):
+        """Enviar alerta de error crítico por Telegram a todos los usuarios"""
+        if not self.telegram_bot_token or not self.telegram_chat_ids:
+            logging.warning("Telegram no configurado")
+            return False
+        
+        try:
+            success_count = 0
+            # Enviar mensaje a todos los usuarios
+            for chat_id in self.telegram_chat_ids:
+                try:
+                    response = requests.post(
+                        f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage",
+                        data={
+                            'chat_id': chat_id,
+                            'text': error_message,
+                            'parse_mode': 'Markdown'
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        success_count += 1
+                        logging.info(f"Alerta crítica enviada a usuario {chat_id}")
+                    else:
+                        logging.error(f"Error al enviar alerta crítica a {chat_id}: {response.text}")
+                except Exception as e:
+                    logging.error(f"Error al enviar alerta crítica a {chat_id}: {e}")
+            
+            if success_count > 0:
+                logging.info(f"Alertas críticas enviadas a {success_count}/{len(self.telegram_chat_ids)} usuarios")
+                return True
+            else:
+                logging.error("No se pudo enviar alerta crítica a ningún usuario")
+                return False
+            
+        except Exception as e:
+            logging.error(f"Error al enviar alerta crítica Telegram: {e}")
+            return False
+    
     def send_whatsapp_alert(self, availability_data):
         """Enviar alerta por WhatsApp"""
         if not self.twilio_client or not RECIPIENT_WHATSAPP:

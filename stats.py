@@ -170,4 +170,48 @@ class BotStats:
         
         if old_keys:
             logging.info(f"Limpiados {len(old_keys)} registros antiguos")
-            self.save_stats() 
+            self.save_stats()
+    
+    def get_session_summary(self):
+        """Obtener resumen de la sesión actual (últimas 24 horas)"""
+        try:
+            # Obtener datos de las últimas 24 horas
+            cutoff_time = datetime.now() - timedelta(hours=24)
+            cutoff_hour = cutoff_time.replace(minute=0, second=0, microsecond=0)
+            
+            recent_data = {}
+            for hour_key, hour_data in self.stats['hourly_data'].items():
+                try:
+                    hour_date = datetime.fromisoformat(hour_key)
+                    if hour_date >= cutoff_hour:
+                        recent_data[hour_key] = hour_data
+                except:
+                    continue
+            
+            if not recent_data:
+                return "No hay datos recientes"
+            
+            total_attempts = sum(data['attempts'] for data in recent_data.values())
+            total_errors = sum(data['errors'] for data in recent_data.values())
+            successful_attempts = total_attempts - total_errors
+            max_availability = max((data['max_slots'] for data in recent_data.values()), default=0)
+            availability_found = sum(data['availability_found'] for data in recent_data.values())
+            
+            # Obtener última verificación
+            last_verification = "N/A"
+            if recent_data:
+                latest_hour = max(recent_data.keys())
+                last_verification = latest_hour[:16]  # Formato: YYYY-MM-DD HH:MM
+            
+            summary = f"""• Intentos totales: {total_attempts}
+• Intentos exitosos: {successful_attempts}
+• Errores: {total_errors}
+• Máxima disponibilidad encontrada: {max_availability} plazas
+• Veces con disponibilidad: {availability_found}
+• Última verificación: {last_verification}"""
+            
+            return summary
+            
+        except Exception as e:
+            logging.error(f"Error al obtener resumen de sesión: {e}")
+            return "Error al obtener estadísticas" 

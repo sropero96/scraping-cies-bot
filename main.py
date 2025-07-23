@@ -142,20 +142,56 @@ class CiesMonitor:
         except Exception as e:
             logging.error(f"Error en el loop principal: {e}")
         finally:
-            self.cleanup()
+            # Determinar si fue un error crítico o detención manual
+            critical_error = self.consecutive_errors >= self.max_errors
+            self.cleanup(critical_error=critical_error)
     
     def run_once(self):
         """Ejecutar una sola verificación"""
         logging.info("🔍 Ejecutando verificación única...")
         return self.check_availability()
     
-    def cleanup(self):
+    def cleanup(self, critical_error=False):
         """Limpiar recursos"""
         try:
+            # Enviar alerta de error crítico si es necesario
+            if critical_error:
+                self.send_critical_error_alert()
+            
             self.notifier.close()
             logging.info("🧹 Recursos limpiados")
         except Exception as e:
             logging.error(f"Error en cleanup: {e}")
+    
+    def send_critical_error_alert(self):
+        """Enviar alerta de error crítico por Telegram"""
+        try:
+            error_message = f"""
+🚨 **BOT DETENIDO POR ERRORES CRÍTICOS** 🚨
+
+🤖 El bot de monitoreo de Islas Cíes se ha detenido automáticamente debido a errores consecutivos.
+
+⚠️ **Detalles:**
+- Errores consecutivos: {self.consecutive_errors}/{self.max_errors}
+- Última verificación: {self.last_check.strftime('%Y-%m-%d %H:%M:%S') if self.last_check else 'N/A'}
+- Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+🔄 **Acción requerida:**
+Reinicia el bot manualmente para continuar el monitoreo.
+
+📊 **Estadísticas de la sesión:**
+{self.stats.get_session_summary()}
+
+🔗 Repositorio: https://github.com/sropero96/scraping-cies-bot
+            """
+            
+            if self.notifier.send_telegram_critical_alert(error_message):
+                logging.info("✅ Alerta de error crítico enviada por Telegram")
+            else:
+                logging.error("❌ Error al enviar alerta de error crítico")
+                
+        except Exception as e:
+            logging.error(f"Error al enviar alerta de error crítico: {e}")
 
 def main():
     """Función principal"""
