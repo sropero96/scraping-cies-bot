@@ -1,9 +1,9 @@
 {
-  "total_attempts": 55,
+  "total_attempts": 136,
   "total_slots_checked": 0,
   "max_slots_found": 0,
   "availability_found_count": 0,
-  "total_errors": 23,
+  "total_errors": 24,
   "start_date": "2025-07-23T17:04:58.724515",
   "hourly_data": {
     "2025-07-23T17:00:00": {
@@ -15,6 +15,26 @@
       "errors": 23,
       "start_time": "2025-07-23T17:00:00",
       "end_time": "2025-07-23T17:58:23.812394"
+    },
+    "2025-07-23T18:00:00": {
+      "attempts": 65,
+      "total_slots": 0,
+      "max_slots": 0,
+      "min_slots": 0,
+      "availability_found": 0,
+      "errors": 1,
+      "start_time": "2025-07-23T18:00:00",
+      "end_time": "2025-07-23T18:59:38.036497"
+    },
+    "2025-07-23T19:00:00": {
+      "attempts": 16,
+      "total_slots": 0,
+      "max_slots": 0,
+      "min_slots": 0,
+      "availability_found": 0,
+      "errors": 0,
+      "start_time": "2025-07-23T19:00:00",
+      "end_time": "2025-07-23T19:53:38.591176"
     }
   }
 }

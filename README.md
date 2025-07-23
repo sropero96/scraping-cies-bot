@@ -14,8 +14,28 @@ Este bot monitorea continuamente el sitio web oficial de autorizaciones de las I
 - 🕵️ **Modo headless** (sin abrir ventana del navegador)
 - 🛡️ **Anti-detección** con configuraciones avanzadas
 - 📈 **Logs detallados** para debugging
+- 🔄 **Reset automático del navegador** en caso de errores
+- 🧹 **Limpieza de cache y cookies** para evitar problemas de sesión
 
-## 🚀 Instalación
+### 🛠️ Mejoras de Robustez
+
+- **Detección automática de páginas de error**: El bot detecta cuando es redirigido a páginas de error inesperadas
+- **Reset completo del navegador**: En lugar de intentar navegar de vuelta, resetea completamente el navegador
+- **Limpieza de datos**: Elimina cache, cookies y datos de sesión antes de reiniciar
+- **Verificaciones múltiples**: Revisa la página de error en puntos críticos del flujo
+- **Recuperación automática**: Reinicia la navegación desde cero después de un reset
+
+### 🕵️ Configuraciones Anti-Detección
+
+- **User-Agents rotativos**: Usa diferentes user-agents en cada sesión para evitar detección
+- **Delays aleatorios**: Simula comportamiento humano con pausas aleatorias
+- **Clics humanos**: Simula movimientos de mouse y clics naturales
+- **Headers adicionales**: Incluye headers de idioma y aceptación apropiados
+- **Scroll aleatorio**: Simula navegación humana con scrolls aleatorios
+- **Ocultación de automatización**: Elimina indicadores de que es un bot
+- **Configuraciones avanzadas**: Desactiva características que pueden delatar automatización
+
+## �� Instalación
 
 ### Prerrequisitos
 
@@ -213,6 +233,55 @@ pkill -f "python3 main.py"
 🔗 https://autorizacionillasatlanticas.xunta.gal/illasr/inicio
 
 ¡Reserva ahora antes de que se agoten!
+```
+
+## 🧪 Pruebas
+
+### Probar funciones de reset del navegador
+
+Para verificar que las nuevas funciones de reset y limpieza funcionan correctamente:
+
+```bash
+# Activar entorno virtual
+source venv/bin/activate
+
+# Ejecutar pruebas de reset del navegador
+python3 test_browser_reset.py
+```
+
+Este script prueba:
+- Detección de páginas de error
+- Reset completo del navegador
+- Limpieza de cache y cookies
+- Recuperación automática
+
+### Probar configuraciones anti-detección
+
+Para verificar que las configuraciones anti-detección funcionan:
+
+```bash
+# Ejecutar pruebas de anti-detección
+python3 test_anti_detection.py
+```
+
+Este script prueba:
+- Configuraciones anti-detección del WebDriver
+- Rotación de user-agents
+- Comportamientos humanos (delays, scrolls)
+- Clics humanos
+- Ocultación de indicadores de automatización
+
+### Otras pruebas disponibles
+
+```bash
+# Probar notificaciones
+python3 test_notifications.py
+
+# Probar estadísticas
+python3 test_stats.py
+
+# Probar manejo de errores
+python3 test_error_handling.py
 ```
 
 ## 🛠️ Troubleshooting

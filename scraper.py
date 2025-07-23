@@ -1,3 +1,5 @@
+import random
+import string
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -25,58 +27,155 @@ class CiesScraper:
     def __init__(self):
         self.driver = None
         self.wait = None
+        self.user_agents = [
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/120.0'
+        ]
+        
+    def random_delay(self, min_seconds=1, max_seconds=3):
+        """Delay aleatorio para simular comportamiento humano"""
+        delay = random.uniform(min_seconds, max_seconds)
+        time.sleep(delay)
+        return delay
+        
+    def human_like_click(self, element):
+        """Simular clic humano con delay aleatorio"""
+        try:
+            # Scroll suave hacia el elemento
+            self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element)
+            self.random_delay(0.5, 1.5)
+            
+            # Mover el mouse de forma natural (simulado)
+            self.driver.execute_script("""
+                var element = arguments[0];
+                var rect = element.getBoundingClientRect();
+                var centerX = rect.left + rect.width / 2;
+                var centerY = rect.top + rect.height / 2;
+                
+                // Simular movimiento del mouse
+                var event = new MouseEvent('mouseover', {
+                    'view': window,
+                    'bubbles': true,
+                    'cancelable': true,
+                    'clientX': centerX,
+                    'clientY': centerY
+                });
+                element.dispatchEvent(event);
+            """, element)
+            
+            self.random_delay(0.3, 0.8)
+            
+            # Hacer clic
+            element.click()
+            logging.info(f"✅ Clic humano realizado en elemento")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error en clic humano: {e}")
+            # Fallback a clic normal
+            try:
+                element.click()
+                return True
+            except:
+                return False
         
     def setup_driver(self):
-        """Configurar el WebDriver de Chrome"""
+        """Configurar el WebDriver de Chrome con configuraciones anti-detección avanzadas"""
         try:
             chrome_options = Options()
+            
+            # Seleccionar user-agent aleatorio
+            user_agent = random.choice(self.user_agents)
+            
+            # Configuraciones básicas
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-plugins')
+            chrome_options.add_argument('--no-first-run')
+            chrome_options.add_argument('--no-default-browser-check')
+            chrome_options.add_argument('--disable-default-apps')
+            chrome_options.add_argument('--disable-popup-blocking')
+            chrome_options.add_argument('--disable-notifications')
+            chrome_options.add_argument('--disable-background-timer-throttling')
+            chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+            chrome_options.add_argument('--disable-renderer-backgrounding')
+            chrome_options.add_argument('--disable-field-trial-config')
+            chrome_options.add_argument('--disable-ipc-flooding-protection')
+            
+            # Configuraciones anti-detección
+            chrome_options.add_argument(f'--user-agent={user_agent}')
+            
+            # Configuración de headless
             if HEADLESS:
-                # Configuraciones avanzadas para modo headless
                 chrome_options.add_argument('--headless=new')
-                chrome_options.add_argument('--disable-extensions')
-                chrome_options.add_argument('--disable-plugins')
                 chrome_options.add_argument('--disable-images')
-                chrome_options.add_argument('--disable-web-security')
-                chrome_options.add_argument('--disable-features=VizDisplayCompositor')
-                chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-                chrome_options.add_argument('--disable-dev-shm-usage')
-                chrome_options.add_argument('--no-first-run')
-                chrome_options.add_argument('--no-default-browser-check')
-                chrome_options.add_argument('--disable-default-apps')
-                chrome_options.add_argument('--disable-popup-blocking')
-                chrome_options.add_argument('--disable-notifications')
-                chrome_options.add_argument('--disable-background-timer-throttling')
-                chrome_options.add_argument('--disable-backgrounding-occluded-windows')
-                chrome_options.add_argument('--disable-renderer-backgrounding')
-                chrome_options.add_argument('--disable-field-trial-config')
-                chrome_options.add_argument('--disable-ipc-flooding-protection')
-                chrome_options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-                
-                # Configuraciones para evitar detección de bot
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-            else:
-                chrome_options.add_argument('--no-sandbox')
-                chrome_options.add_argument('--disable-dev-shm-usage')
-                chrome_options.add_argument('--disable-gpu')
                 chrome_options.add_argument('--window-size=1920,1080')
+            else:
+                chrome_options.add_argument('--window-size=1920,1080')
+                chrome_options.add_argument('--start-maximized')
+            
+            # Headers adicionales
+            chrome_options.add_argument('--accept-lang=es-ES,es;q=0.9,en;q=0.8')
+            chrome_options.add_argument('--accept=text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8')
+            
+            # Configuraciones experimentales
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            chrome_options.add_experimental_option("prefs", {
+                "profile.default_content_setting_values.notifications": 2,
+                "profile.default_content_settings.popups": 0,
+                "profile.managed_default_content_settings.images": 2,
+                "profile.default_content_setting_values.media_stream": 2,
+            })
             
             # Configurar Chrome para macOS
             chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
             
-            # Usar configuración simple sin webdriver-manager
+            # Crear driver
             self.driver = webdriver.Chrome(options=chrome_options)
             self.wait = WebDriverWait(self.driver, BROWSER_TIMEOUT)
             
-            # Configuraciones adicionales para evitar detección de bot
-            if HEADLESS:
-                # Ejecutar JavaScript para ocultar indicadores de automatización
-                self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-                self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
-                self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
-                self.driver.execute_script("window.chrome = {runtime: {}}")
+            # Configuraciones adicionales post-inicialización
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
+            self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['es-ES', 'es', 'en-US', 'en']})")
+            self.driver.execute_script("window.chrome = {runtime: {}}")
             
-            logging.info("WebDriver configurado correctamente")
+            # Agregar propiedades adicionales para evitar detección
+            self.driver.execute_script("""
+                Object.defineProperty(navigator, 'permissions', {
+                    get: () => ({
+                        query: () => Promise.resolve({ state: 'granted' })
+                    })
+                });
+                
+                Object.defineProperty(navigator, 'connection', {
+                    get: () => ({
+                        effectiveType: '4g',
+                        rtt: 50,
+                        downlink: 10
+                    })
+                });
+                
+                // Simular que no es un bot
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;
+                delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;
+            """)
+            
+            mode = "headless" if HEADLESS else "visible"
+            logging.info(f"WebDriver configurado correctamente en modo {mode} con User-Agent: {user_agent[:50]}...")
             return True
             
         except Exception as e:
@@ -84,14 +183,31 @@ class CiesScraper:
             return False
     
     def navigate_to_site(self):
-        """Navegar al sitio web objetivo"""
+        """Navegar al sitio web objetivo con comportamiento humano"""
         try:
+            # Delay aleatorio antes de navegar
+            self.random_delay(2, 5)
+            
             self.driver.get(TARGET_URL)
             logging.info(f"Navegando a: {TARGET_URL}")
             
             # Esperar a que la página cargue
             self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-            time.sleep(1)  # Reducido de 3 a 1 segundo
+            
+            # Simular comportamiento humano: scroll aleatorio
+            self.driver.execute_script("""
+                // Scroll aleatorio para simular comportamiento humano
+                setTimeout(() => {
+                    window.scrollTo(0, Math.random() * 100);
+                }, 500);
+                
+                setTimeout(() => {
+                    window.scrollTo(0, 0);
+                }, 1500);
+            """)
+            
+            # Delay aleatorio después de cargar
+            self.random_delay(2, 4)
             
             return True
             
@@ -149,12 +265,18 @@ class CiesScraper:
             return False
     
     def click_visitantes_cies(self):
-        """Hacer clic en el icono de Visitantes para Islas Cíes"""
+        """Hacer clic en el icono de Visitantes para Islas Cíes con comportamiento humano"""
         try:
             logging.info("🔍 Buscando icono de Visitantes para Islas Cíes...")
             
+            # Delay aleatorio antes de buscar
+            self.random_delay(1, 3)
+            
             # Primero explorar la página de inicio
             self.explore_home_page()
+            
+            # Delay aleatorio después de explorar
+            self.random_delay(1, 2)
             
             # Buscar elementos que contengan "Visitantes" con diferentes estrategias
             # Ser más específicos para encontrar el elemento correcto
@@ -222,17 +344,15 @@ class CiesScraper:
                     pass
             
             if visitantes_element:
-                # Hacer scroll hasta el elemento
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", visitantes_element)
-                time.sleep(1)
+                # Delay aleatorio antes del clic
+                self.random_delay(1, 3)
                 
-                # Intentar hacer clic
-                try:
-                    visitantes_element.click()
-                    logging.info("✅ Clic en Visitantes para Islas Cíes realizado")
+                # Usar clic humano en lugar de clic normal
+                if self.human_like_click(visitantes_element):
+                    logging.info("✅ Clic humano en Visitantes para Islas Cíes realizado")
                     
-                    # Esperar a que navegue a la página de solicitud
-                    time.sleep(3)
+                    # Delay aleatorio después del clic
+                    self.random_delay(2, 4)
                     
                     # Verificar que navegamos a la página correcta
                     current_url = self.driver.current_url
@@ -245,7 +365,7 @@ class CiesScraper:
                         if self.handle_error_page():
                             logging.info("✅ Página de error manejada exitosamente")
                             # Intentar el clic nuevamente después de volver al inicio
-                            time.sleep(2)
+                            self.random_delay(2, 4)
                             return self.click_visitantes_cies()  # Llamada recursiva
                         else:
                             logging.error("❌ No se pudo manejar la página de error")
@@ -254,18 +374,11 @@ class CiesScraper:
                         logging.warning(f"⚠️ Navegó a URL inesperada: {current_url}")
                         # Intentar navegar directamente a la página de solicitud
                         self.driver.get("https://autorizacionillasatlanticas.xunta.gal/illasr/iniciarReserva")
-                        time.sleep(3)
+                        self.random_delay(2, 3)
                         return True
-                except Exception as e:
-                    logging.error(f"Error al hacer clic: {e}")
-                    # Intentar clic con JavaScript
-                    try:
-                        self.driver.execute_script("arguments[0].click();", visitantes_element)
-                        logging.info("✅ Clic en Visitantes realizado con JavaScript")
-                        time.sleep(3)
-                        return True
-                    except:
-                        return False
+                else:
+                    logging.error("❌ Error en clic humano")
+                    return False
             else:
                 logging.error("❌ No se pudo encontrar el elemento Visitantes para Islas Cíes")
                 return False
@@ -345,6 +458,10 @@ class CiesScraper:
             # Primero explorar la estructura
             self.explore_page_structure()
             
+            # Verificar si estamos en página de error después de explorar
+            if not self.check_and_handle_error_page():
+                return False
+            
             # Buscar el campo de fecha usando los IDs específicos encontrados
             date_selectors = [
                 "//input[@id='fecha']",
@@ -374,6 +491,10 @@ class CiesScraper:
             # Hacer clic en el campo de fecha para abrir el calendario
             date_input.click()
             logging.info("Campo de fecha clickeado - esperando calendario...")
+            
+            # Verificar si estamos en página de error después del clic
+            if not self.check_and_handle_error_page():
+                return False
             
             # Esperar a que aparezca el calendario
             time.sleep(3)
@@ -434,6 +555,10 @@ class CiesScraper:
             # Navegar hasta agosto 2025
             target_reached = self.navigate_to_august_2025(next_arrow)
             
+            # Verificar si estamos en página de error después de navegar en el calendario
+            if not self.check_and_handle_error_page():
+                return False
+            
             if target_reached:
                 # Seleccionar el día 2
                 day_2_selectors = [
@@ -457,6 +582,11 @@ class CiesScraper:
                     day_2_element.click()
                     logging.info("✅ Día 2 seleccionado")
                     time.sleep(2)  # Esperar a que se aplique la selección
+                    
+                    # Verificar si estamos en página de error después de seleccionar el día
+                    if not self.check_and_handle_error_page():
+                        return False
+                    
                     return True
                 else:
                     logging.error("No se pudo encontrar el día 2")
@@ -566,6 +696,10 @@ class CiesScraper:
     def get_available_slots(self):
         """Obtener el número de plazas disponibles"""
         try:
+            # Verificar si estamos en página de error antes de obtener slots
+            if not self.check_and_handle_error_page():
+                return 0
+            
             # Buscar el elemento que muestra las plazas libres
             # Basándome en la imagen, parece estar en un panel derecho
             slots_element = self.wait.until(
@@ -586,61 +720,107 @@ class CiesScraper:
             logging.error(f"Error al obtener plazas disponibles: {e}")
             return 0
     
+    def is_error_page(self):
+        """Verificar si estamos en la página de error"""
+        try:
+            current_url = self.driver.current_url
+            return "aceptacion" in current_url
+        except:
+            return False
+
+    def check_and_handle_error_page(self):
+        """Verificar si estamos en página de error y manejarla si es necesario"""
+        if self.is_error_page():
+            logging.warning("⚠️ Detectada página de error durante el flujo")
+            if not self.handle_error_page():
+                logging.error("❌ No se pudo manejar la página de error")
+                return False
+            return True
+        return True
+
+    def clear_browser_data(self):
+        """Limpiar cache, cookies y datos del navegador"""
+        try:
+            logging.info("🧹 Limpiando cache, cookies y datos del navegador...")
+            
+            # Limpiar cache
+            self.driver.execute_script("window.localStorage.clear();")
+            self.driver.execute_script("window.sessionStorage.clear();")
+            
+            # Limpiar cookies
+            self.driver.delete_all_cookies()
+            
+            # Limpiar cache del navegador
+            self.driver.execute_script("""
+                if ('caches' in window) {
+                    caches.keys().then(function(names) {
+                        for (let name of names) {
+                            caches.delete(name);
+                        }
+                    });
+                }
+            """)
+            
+            logging.info("✅ Datos del navegador limpiados exitosamente")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error al limpiar datos del navegador: {e}")
+            return False
+
+    def reset_browser(self):
+        """Resetear completamente el navegador"""
+        try:
+            logging.info("🔄 Reseteando navegador...")
+            
+            # Cerrar el driver actual
+            if self.driver:
+                self.driver.quit()
+                self.driver = None
+                self.wait = None
+                logging.info("✅ Driver anterior cerrado")
+            
+            # Pequeña pausa para asegurar que se cierre completamente
+            time.sleep(2)
+            
+            # Configurar un nuevo driver
+            if not self.setup_driver():
+                logging.error("❌ Error al configurar nuevo driver")
+                return False
+            
+            logging.info("✅ Navegador reseteado exitosamente")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error al resetear navegador: {e}")
+            return False
+
     def handle_error_page(self):
-        """Manejar página de error y volver al inicio"""
+        """Manejar página de error reseteando el navegador completamente"""
         try:
             # Verificar si estamos en la página de error
             current_url = self.driver.current_url
             if "aceptacion" not in current_url:
                 return True  # No estamos en página de error
             
-            logging.info("🔄 Detectada página de error, buscando botón 'Ir ao inicio'...")
+            logging.info("🔄 Detectada página de error inesperada")
+            logging.info("🔄 Iniciando reset completo del navegador...")
             
-            # Buscar el botón "Ir ao inicio"
-            ir_inicio_selectors = [
-                "//a[contains(text(), 'Ir ao inicio')]",
-                "//button[contains(text(), 'Ir ao inicio')]",
-                "//a[contains(@class, 'inicio')]",
-                "//button[contains(@class, 'inicio')]",
-                "//a[contains(@href, 'inicio')]",
-                "//*[contains(text(), 'Ir ao inicio')]"
-            ]
+            # Limpiar datos del navegador antes de resetear
+            self.clear_browser_data()
             
-            ir_inicio_button = None
-            for selector in ir_inicio_selectors:
-                try:
-                    ir_inicio_button = self.driver.find_element(By.XPATH, selector)
-                    if ir_inicio_button.is_displayed():
-                        logging.info(f"Botón 'Ir ao inicio' encontrado con selector: {selector}")
-                        break
-                except:
-                    continue
-            
-            if not ir_inicio_button:
-                logging.error("❌ No se pudo encontrar el botón 'Ir ao inicio'")
+            # Resetear completamente el navegador
+            if not self.reset_browser():
+                logging.error("❌ Error al resetear navegador")
                 return False
             
-            # Hacer clic en el botón
-            try:
-                # Usar JavaScript para evitar problemas de interceptación
-                self.driver.execute_script("arguments[0].click();", ir_inicio_button)
-                logging.info("✅ Clic realizado en 'Ir ao inicio'")
-                
-                # Esperar a que la página cargue
-                time.sleep(3)
-                
-                # Verificar que estamos en la página de inicio
-                current_url = self.driver.current_url
-                if "inicio" in current_url:
-                    logging.info("✅ Regresado exitosamente a la página de inicio")
-                    return True
-                else:
-                    logging.warning(f"⚠️ URL después de clic: {current_url}")
-                    return False
-                    
-            except Exception as e:
-                logging.error(f"Error al hacer clic en 'Ir ao inicio': {e}")
+            # Navegar nuevamente al sitio desde cero
+            if not self.navigate_to_site():
+                logging.error("❌ Error al navegar al sitio después del reset")
                 return False
+            
+            logging.info("✅ Navegación reiniciada exitosamente después del reset")
+            return True
                 
         except Exception as e:
             logging.error(f"Error manejando página de error: {e}")
@@ -667,15 +847,18 @@ class CiesScraper:
                     logging.error("❌ No se pudo manejar la página de error")
                     return None
                 
-                # Intentar el clic nuevamente después de volver al inicio
-                time.sleep(2)
+                # Después del reset, reiniciar completamente el flujo
+                logging.info("🔄 Reiniciando flujo completo después del reset...")
+                
+                # Hacer clic en Visitantes para Islas Cíes nuevamente
                 if not self.click_visitantes_cies():
+                    logging.error("❌ Error al hacer clic en Visitantes después del reset")
                     return None
                 
                 # Verificar nuevamente si estamos en página de error
                 current_url = self.driver.current_url
                 if "aceptacion" in current_url:
-                    logging.error("❌ Seguimos en página de error después del segundo intento")
+                    logging.error("❌ Seguimos en página de error después del reset")
                     return None
                 
             if not self.select_target_date():
