@@ -30,7 +30,7 @@ TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', '')  # Número de Twilio
 RECIPIENT_WHATSAPP = os.getenv('RECIPIENT_WHATSAPP', '')  # Tu número de WhatsApp
 
 # Configuración del navegador
-HEADLESS = False  # Cambiado a False para evitar detección
+HEADLESS = True  # Cambiado de vuelta a True para evitar ventanas visibles
 BROWSER_TIMEOUT = 20  # segundos (aumentado para más estabilidad)
 
 # Configuración anti-detección mejorada

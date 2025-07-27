@@ -52,7 +52,7 @@ class HybridCiesScraper:
             
             # Configuración de headless
             if HEADLESS:
-                chrome_options.add_argument('--headless')
+                chrome_options.add_argument('--headless=new')  # Usar nueva versión de headless
             
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
@@ -63,18 +63,40 @@ class HybridCiesScraper:
             user_agent = random.choice(USER_AGENTS)
             chrome_options.add_argument(f'--user-agent={user_agent}')
             
-            # Anti-detección mejorada
+            # Anti-detección mejorada para headless
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
             
-            # Configuraciones adicionales para evitar detección
+            # Configuraciones adicionales para evitar detección en headless
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--disable-plugins')
             chrome_options.add_argument('--disable-web-security')
             chrome_options.add_argument('--allow-running-insecure-content')
             chrome_options.add_argument('--disable-features=VizDisplayCompositor')
             chrome_options.add_argument('--disable-ipc-flooding-protection')
+            chrome_options.add_argument('--disable-background-timer-throttling')
+            chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+            chrome_options.add_argument('--disable-renderer-backgrounding')
+            chrome_options.add_argument('--disable-field-trial-config')
+            chrome_options.add_argument('--disable-back-forward-cache')
+            chrome_options.add_argument('--disable-http-cache')
+            chrome_options.add_argument('--disable-cache')
+            chrome_options.add_argument('--disable-application-cache')
+            chrome_options.add_argument('--disable-offline-load-stale-cache')
+            chrome_options.add_argument('--disk-cache-size=0')
+            
+            # Configuraciones específicas para evitar detección de headless
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--no-first-run')
+            chrome_options.add_argument('--no-default-browser-check')
+            chrome_options.add_argument('--disable-default-apps')
+            chrome_options.add_argument('--disable-sync')
+            chrome_options.add_argument('--disable-translate')
+            chrome_options.add_argument('--hide-scrollbars')
+            chrome_options.add_argument('--mute-audio')
+            chrome_options.add_argument('--no-zygote')
+            chrome_options.add_argument('--single-process')
             
             # Preferencias adicionales
             prefs = {
@@ -85,17 +107,31 @@ class HybridCiesScraper:
                 },
                 "profile.managed_default_content_settings": {
                     "images": 1  # Permitir imágenes para parecer más humano
+                },
+                "profile.default_content_settings": {
+                    "popups": 0
                 }
             }
             chrome_options.add_experimental_option("prefs", prefs)
             
             self.driver = webdriver.Chrome(options=chrome_options)
             
-            # Scripts para ocultar automatización
+            # Scripts para ocultar automatización (más agresivos)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
             self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
             self.driver.execute_script("Object.defineProperty(navigator, 'permissions', {get: () => ({query: () => Promise.resolve({state: 'granted'})})})")
+            
+            # Scripts adicionales para evitar detección
+            self.driver.execute_script("""
+                Object.defineProperty(navigator, 'platform', {get: () => 'MacIntel'});
+                Object.defineProperty(navigator, 'hardwareConcurrency', {get: () => 8});
+                Object.defineProperty(navigator, 'deviceMemory', {get: () => 8});
+                Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 0});
+                Object.defineProperty(navigator, 'cookieEnabled', {get: () => true});
+                Object.defineProperty(navigator, 'doNotTrack', {get: () => null});
+                Object.defineProperty(navigator, 'onLine', {get: () => true});
+            """)
             
             self.wait = WebDriverWait(self.driver, BROWSER_TIMEOUT)
             
