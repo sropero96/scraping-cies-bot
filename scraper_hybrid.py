@@ -16,7 +16,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from config import TARGET_DATE, TARGET_URL, USER_AGENTS, MIN_DELAY, MAX_DELAY
+from config import TARGET_DATE, TARGET_URL, USER_AGENTS, MIN_DELAY, MAX_DELAY, HEADLESS, BROWSER_TIMEOUT, MAX_RETRIES, RETRY_DELAY
 
 class HybridCiesScraper:
     def __init__(self):
@@ -24,6 +24,7 @@ class HybridCiesScraper:
         self.driver = None
         self.wait = None
         self.csrf_token = None
+        self.retry_count = 0
         self.setup_session()
         
     def setup_session(self):
@@ -48,7 +49,11 @@ class HybridCiesScraper:
         """Configurar WebDriver con anti-detección mejorada"""
         try:
             chrome_options = Options()
-            chrome_options.add_argument('--headless')
+            
+            # Configuración de headless
+            if HEADLESS:
+                chrome_options.add_argument('--headless')
+            
             chrome_options.add_argument('--no-sandbox')
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-gpu')
@@ -62,12 +67,14 @@ class HybridCiesScraper:
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            
+            # Configuraciones adicionales para evitar detección
             chrome_options.add_argument('--disable-extensions')
             chrome_options.add_argument('--disable-plugins')
-            chrome_options.add_argument('--disable-images')
-            chrome_options.add_argument('--disable-javascript')
             chrome_options.add_argument('--disable-web-security')
             chrome_options.add_argument('--allow-running-insecure-content')
+            chrome_options.add_argument('--disable-features=VizDisplayCompositor')
+            chrome_options.add_argument('--disable-ipc-flooding-protection')
             
             # Preferencias adicionales
             prefs = {
@@ -75,15 +82,22 @@ class HybridCiesScraper:
                     "notifications": 2,
                     "geolocation": 2,
                     "media_stream": 2
+                },
+                "profile.managed_default_content_settings": {
+                    "images": 1  # Permitir imágenes para parecer más humano
                 }
             }
             chrome_options.add_experimental_option("prefs", prefs)
             
             self.driver = webdriver.Chrome(options=chrome_options)
+            
+            # Scripts para ocultar automatización
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
             self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
-            self.wait = WebDriverWait(self.driver, 15)
+            self.driver.execute_script("Object.defineProperty(navigator, 'permissions', {get: () => ({query: () => Promise.resolve({state: 'granted'})})})")
+            
+            self.wait = WebDriverWait(self.driver, BROWSER_TIMEOUT)
             
             logging.info("✅ WebDriver configurado correctamente")
             return True
@@ -107,11 +121,11 @@ class HybridCiesScraper:
         try:
             # Scroll hasta el elemento
             self.driver.execute_script("arguments[0].scrollIntoView(true);", element)
-            self.random_delay(0.5, 1)
+            self.random_delay(1, 2)
             
             # Mover mouse al elemento
             webdriver.ActionChains(self.driver).move_to_element(element).perform()
-            self.random_delay(0.3, 0.7)
+            self.random_delay(0.5, 1.5)
             
             # Hacer clic
             element.click()
@@ -122,12 +136,43 @@ class HybridCiesScraper:
             logging.error(f"Error en clic humano: {e}")
             return False
     
-    def navigate_to_solicitud_page(self):
-        """Navegar hasta la página de solicitud usando Selenium"""
+    def navigate_direct_to_solicitud(self):
+        """Navegar directamente a la página de solicitud"""
         try:
+            direct_url = "https://autorizacionillasatlanticas.xunta.gal/illasr/iniciarReserva"
+            logging.info(f"🌐 Navegando directamente a: {direct_url}")
+            
+            self.driver.get(direct_url)
+            self.random_delay(3, 6)
+            
+            # Verificar si llegamos a la página correcta
+            current_url = self.driver.current_url
+            if "iniciarReserva" in current_url:
+                logging.info("✅ Navegación directa exitosa")
+                return True
+            elif "aceptacion" in current_url:
+                logging.warning("⚠️ Redirigido a página de error en navegación directa")
+                return False
+            else:
+                logging.warning(f"⚠️ URL inesperada en navegación directa: {current_url}")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error en navegación directa: {e}")
+            return False
+    
+    def navigate_to_solicitud_page(self):
+        """Navegar hasta la página de solicitud usando estrategia híbrida"""
+        try:
+            # Primero intentar navegación directa
+            if self.navigate_direct_to_solicitud():
+                return True
+            
+            # Si falla, intentar navegación tradicional
+            logging.info("🔄 Intentando navegación tradicional...")
             logging.info("🌐 Navegando a la página de inicio...")
             self.driver.get(TARGET_URL)
-            self.random_delay(3, 6)  # Delay más largo al cargar página
+            self.random_delay(3, 6)
             
             # Verificar si estamos en página de error
             current_url = self.driver.current_url
@@ -136,7 +181,7 @@ class HybridCiesScraper:
                 return self.handle_error_page()
             
             logging.info("🔍 Buscando enlace de Visitantes para Islas Cíes...")
-            self.random_delay(2, 4)  # Delay antes de buscar elementos
+            self.random_delay(2, 4)
             
             # Buscar elementos que contengan "Visitantes" y "Cíes"
             visitantes_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Visitantes')]")
@@ -163,7 +208,7 @@ class HybridCiesScraper:
             if not self.human_like_click(target_element):
                 return False
             
-            self.random_delay(3, 6)  # Delay más largo después del clic
+            self.random_delay(3, 6)
             
             # Verificar que llegamos a la página de solicitud
             current_url = self.driver.current_url
@@ -339,48 +384,79 @@ class HybridCiesScraper:
             return -1
     
     def check_availability_hybrid(self):
-        """Verificar disponibilidad usando enfoque híbrido"""
-        try:
-            logging.info("🚀 Iniciando verificación híbrida...")
-            
-            # Configurar driver
-            if not self.setup_driver():
-                return None
-            
-            # Obtener plazas usando enfoque híbrido
-            slots = self.get_available_slots_hybrid()
-            
-            # Determinar estado
-            if slots == -1:
-                has_availability = None
-                status = "error_detection"
-                logging.warning("⚠️ Error en la detección de plazas via API híbrida")
-            elif slots > 0:
-                has_availability = True
-                status = "available"
-                logging.info(f"🎉 ¡PLAZAS DISPONIBLES ENCONTRADAS! ({slots} plazas)")
-            else:
-                has_availability = False
-                status = "unavailable"
-                logging.info("😔 No hay plazas disponibles")
-            
-            return {
-                'date': TARGET_DATE,
-                'available_slots': slots,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                'has_availability': has_availability,
-                'status': status,
-                'detection_error': slots == -1,
-                'method': 'hybrid_api'
-            }
-            
-        except Exception as e:
-            logging.error(f"Error en verificación híbrida: {e}")
-            return None
-        finally:
-            if self.driver:
-                self.driver.quit()
-                logging.info("WebDriver cerrado")
+        """Verificar disponibilidad usando enfoque híbrido con reintentos"""
+        for attempt in range(MAX_RETRIES):
+            try:
+                logging.info(f"🚀 Iniciando verificación híbrida (intento {attempt + 1}/{MAX_RETRIES})...")
+                
+                # Configurar driver
+                if not self.setup_driver():
+                    if attempt < MAX_RETRIES - 1:
+                        logging.warning(f"⚠️ Reintentando en {RETRY_DELAY} segundos...")
+                        time.sleep(RETRY_DELAY)
+                        continue
+                    else:
+                        return None
+                
+                # Obtener plazas usando enfoque híbrido
+                slots = self.get_available_slots_hybrid()
+                
+                # Si obtuvimos datos válidos, retornar resultado
+                if slots != -1:
+                    # Determinar estado
+                    if slots > 0:
+                        has_availability = True
+                        status = "available"
+                        logging.info(f"🎉 ¡PLAZAS DISPONIBLES ENCONTRADAS! ({slots} plazas)")
+                    else:
+                        has_availability = False
+                        status = "unavailable"
+                        logging.info("😔 No hay plazas disponibles")
+                    
+                    return {
+                        'date': TARGET_DATE,
+                        'available_slots': slots,
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'has_availability': has_availability,
+                        'status': status,
+                        'detection_error': False,
+                        'method': 'hybrid_api',
+                        'attempt': attempt + 1
+                    }
+                
+                # Si no obtuvimos datos y no es el último intento, reintentar
+                if attempt < MAX_RETRIES - 1:
+                    logging.warning(f"⚠️ Error en detección, reintentando en {RETRY_DELAY} segundos...")
+                    time.sleep(RETRY_DELAY)
+                    continue
+                else:
+                    # Último intento fallido
+                    logging.error("❌ Todos los intentos fallaron")
+                    return {
+                        'date': TARGET_DATE,
+                        'available_slots': -1,
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'has_availability': None,
+                        'status': 'error_detection',
+                        'detection_error': True,
+                        'method': 'hybrid_api',
+                        'attempt': MAX_RETRIES
+                    }
+                
+            except Exception as e:
+                logging.error(f"Error en verificación híbrida (intento {attempt + 1}): {e}")
+                if attempt < MAX_RETRIES - 1:
+                    logging.warning(f"⚠️ Reintentando en {RETRY_DELAY} segundos...")
+                    time.sleep(RETRY_DELAY)
+                    continue
+                else:
+                    return None
+            finally:
+                if self.driver:
+                    self.driver.quit()
+                    logging.info("WebDriver cerrado")
+        
+        return None
     
     def close_driver(self):
         """Cerrar el WebDriver"""
