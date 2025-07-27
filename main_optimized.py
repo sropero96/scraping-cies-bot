@@ -12,7 +12,7 @@ from datetime import datetime
 from scraper_hybrid import HybridCiesScraper
 from notifier import Notifier
 from stats import BotStats
-from config import TARGET_DATE, TARGET_URL
+from config import TARGET_DATE, TARGET_URL, CHECK_INTERVAL, CRITICAL_ERROR_THRESHOLD, CRITICAL_ERROR_TIME_THRESHOLD
 
 # Configurar logging
 logging.basicConfig(
@@ -32,6 +32,9 @@ class OptimizedCiesMonitor:
         self.consecutive_errors = 0
         self.max_errors = 5
         self.last_check = None
+        self.last_successful_check = None
+        self.consecutive_failures = 0
+        self.last_critical_alert = None
         
     def check_availability(self):
         """Verificar disponibilidad usando scraper híbrido"""
@@ -44,8 +47,12 @@ class OptimizedCiesMonitor:
             
             if result is None:
                 self.consecutive_errors += 1
+                self.consecutive_failures += 1
                 self.stats.record_attempt(0, had_error=True)
                 logging.error(f"Error en verificación (intento {self.consecutive_errors}/{self.max_errors})")
+                
+                # Verificar si debemos enviar alerta crítica
+                self.check_critical_error_conditions()
                 
                 if self.consecutive_errors >= self.max_errors:
                     logging.critical("Demasiados errores consecutivos, deteniendo bot")
@@ -54,10 +61,17 @@ class OptimizedCiesMonitor:
                 
                 return True
             
-            # Resetear contador de errores si la verificación fue exitosa
+            # Resetear contadores si la verificación fue exitosa
             if self.consecutive_errors > 0:
                 logging.info(f"✅ Verificación exitosa después de {self.consecutive_errors} errores")
                 self.consecutive_errors = 0
+            
+            # Resetear contador de fallos si obtuvimos datos válidos
+            if result['available_slots'] != -1:
+                if self.consecutive_failures > 0:
+                    logging.info(f"✅ Datos obtenidos después de {self.consecutive_failures} fallos consecutivos")
+                self.consecutive_failures = 0
+                self.last_successful_check = datetime.now()
             
             # Procesar resultado
             slots = result['available_slots']
@@ -71,7 +85,7 @@ class OptimizedCiesMonitor:
             if slots == -1:
                 # Error de detección
                 logging.warning("⚠️ Error de detección de plazas")
-                self.send_detection_error_notification(result)
+                # No enviar notificación de error de detección individual
             elif slots > 0:
                 # ¡PLAZAS DISPONIBLES!
                 logging.info(f"🎉 ¡PLAZAS DISPONIBLES ENCONTRADAS! ({slots} plazas)")
@@ -88,13 +102,39 @@ class OptimizedCiesMonitor:
         except Exception as e:
             logging.error(f"Error en check_availability: {e}")
             self.consecutive_errors += 1
+            self.consecutive_failures += 1
             return True
+    
+    def check_critical_error_conditions(self):
+        """Verificar si se cumplen las condiciones para alerta crítica"""
+        now = datetime.now()
+        
+        # Verificar umbral de intentos
+        attempts_threshold = self.consecutive_failures >= CRITICAL_ERROR_THRESHOLD
+        
+        # Verificar umbral de tiempo
+        time_threshold = False
+        if self.last_successful_check:
+            time_since_success = (now - self.last_successful_check).total_seconds()
+            time_threshold = time_since_success >= CRITICAL_ERROR_TIME_THRESHOLD
+        
+        # Verificar si ya enviamos una alerta recientemente (evitar spam)
+        should_send = False
+        if self.last_critical_alert:
+            time_since_last_alert = (now - self.last_critical_alert).total_seconds()
+            should_send = time_since_last_alert >= 300  # 5 minutos entre alertas
+        else:
+            should_send = True
+        
+        if (attempts_threshold or time_threshold) and should_send:
+            logging.critical(f"🚨 CONDICIÓN CRÍTICA DETECTADA: {self.consecutive_failures} fallos consecutivos, {time_since_success if self.last_successful_check else 'N/A'}s sin éxito")
+            self.send_critical_error_notification()
+            self.last_critical_alert = now
     
     def send_availability_alert(self, slots, result):
         """Enviar alerta de disponibilidad"""
         try:
-            message = f"""
-🚨 ¡PLAZAS DISPONIBLES ENCONTRADAS! 🚨
+            message = f"""🚨 ¡PLAZAS DISPONIBLES ENCONTRADAS! 🚨
 
 📅 Fecha: {result['date']}
 🎫 Plazas disponibles: {slots}
@@ -103,8 +143,7 @@ class OptimizedCiesMonitor:
 
 🌐 Enlace directo: https://autorizacionillasatlanticas.xunta.gal/illasr/iniciarReserva
 
-¡Actúa rápido antes de que se agoten!
-            """.strip()
+¡Actúa rápido antes de que se agoten!""".strip()
             
             # Usar el notificador existente
             alert_result = {
@@ -118,9 +157,9 @@ class OptimizedCiesMonitor:
                 logging.info("✅ Alertas de disponibilidad enviadas")
             else:
                 logging.error("❌ Error enviando alertas de disponibilidad")
-            
+                
         except Exception as e:
-            logging.error(f"Error enviando alertas de disponibilidad: {e}")
+            logging.error(f"Error enviando alerta de disponibilidad: {e}")
     
     def send_detection_error_notification(self, result):
         """Enviar notificación de error de detección"""
@@ -156,8 +195,8 @@ No es necesario que hagas nada manualmente.
         try:
             stats_summary = self.stats.get_summary()
             
-            message = f"""
-🚨 ERROR CRÍTICO - BOT DETENIDO
+            # Limpiar el mensaje para evitar errores de Telegram
+            message = f"""🚨 ERROR CRÍTICO - BOT DETENIDO
 
 ❌ El bot se ha detenido debido a demasiados errores consecutivos.
 
@@ -169,15 +208,9 @@ No es necesario que hagas nada manualmente.
 2. Presiona Ctrl+C para detenerlo
 3. Ejecuta: python3 main_optimized.py
 
-⚠️ El bot NO se reiniciará automáticamente.
-            """.strip()
+⚠️ El bot NO se reiniciará automáticamente.""".strip()
             
             self.notifier.send_telegram_critical_alert(message)
-            self.notifier.send_email_alert({
-                'date': TARGET_DATE,
-                'available_slots': 0,
-                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            })
             
             logging.info("✅ Notificación de error crítico enviada")
             
@@ -198,16 +231,14 @@ No es necesario que hagas nada manualmente.
         try:
             stats_summary = self.stats.get_summary()
             
-            message = f"""
-📊 Resumen Horario - Bot Islas Cíes
+            message = f"""📊 Resumen Horario - Bot Islas Cíes
 
 ⏰ Hora: {datetime.now().strftime('%H:%M')}
 📅 Fecha objetivo: {TARGET_DATE}
 
 {stats_summary}
 
-🤖 El bot continúa monitoreando automáticamente.
-            """.strip()
+🤖 El bot continúa monitoreando automáticamente.""".strip()
             
             self.notifier.send_telegram_summary(message)
             
@@ -220,20 +251,18 @@ No es necesario que hagas nada manualmente.
         """Ejecutar el bot optimizado"""
         logging.info("🚀 Iniciando bot optimizado de Islas Cíes...")
         logging.info(f"📅 Fecha objetivo: {TARGET_DATE}")
-        logging.info(f"⏱️ Intervalo de verificación: 1 segundo")
+        logging.info(f"⏱️ Intervalo de verificación: {CHECK_INTERVAL} segundos")
         logging.info(f"🛑 Máximo errores consecutivos: {self.max_errors}")
         
         # Enviar notificación de inicio
         try:
-            start_message = f"""
-🤖 Bot Optimizado Iniciado
+            start_message = f"""🤖 Bot Optimizado Iniciado
 
 📅 Fecha objetivo: {TARGET_DATE}
-⏱️ Intervalo: 1 segundo
+⏱️ Intervalo: {CHECK_INTERVAL} segundos
 🔧 Método: Híbrido (Selenium + API)
 
-El bot comenzará a monitorear automáticamente.
-            """.strip()
+El bot comenzará a monitorear automáticamente.""".strip()
             
             self.notifier.send_telegram_summary(start_message)
             
@@ -246,20 +275,18 @@ El bot comenzará a monitorear automáticamente.
                     break
                 
                 # Esperar antes de la siguiente verificación
-                time.sleep(1)
+                time.sleep(CHECK_INTERVAL)
                 
         except KeyboardInterrupt:
             logging.info("🛑 Bot detenido por el usuario")
             
             # Enviar notificación de parada
             try:
-                stop_message = f"""
-🛑 Bot Detenido Manualmente
+                stop_message = f"""🛑 Bot Detenido Manualmente
 
 ⏰ Hora de parada: {datetime.now().strftime('%H:%M:%S')}
 📊 Estadísticas finales:
-{self.stats.get_summary()}
-                """.strip()
+{self.stats.get_summary()}""".strip()
                 
                 self.notifier.send_telegram_summary(stop_message)
                 

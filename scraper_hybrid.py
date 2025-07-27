@@ -16,7 +16,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
-from config import TARGET_DATE, TARGET_URL
+from config import TARGET_DATE, TARGET_URL, USER_AGENTS, MIN_DELAY, MAX_DELAY
 
 class HybridCiesScraper:
     def __init__(self):
@@ -28,8 +28,9 @@ class HybridCiesScraper:
         
     def setup_session(self):
         """Configurar sesión HTTP con headers apropiados"""
+        user_agent = random.choice(USER_AGENTS)
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'User-Agent': user_agent,
             'Accept': 'application/json, text/javascript, */*; q=0.01',
             'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br, zstd',
@@ -44,7 +45,7 @@ class HybridCiesScraper:
         })
     
     def setup_driver(self):
-        """Configurar WebDriver con anti-detección"""
+        """Configurar WebDriver con anti-detección mejorada"""
         try:
             chrome_options = Options()
             chrome_options.add_argument('--headless')
@@ -52,16 +53,37 @@ class HybridCiesScraper:
             chrome_options.add_argument('--disable-dev-shm-usage')
             chrome_options.add_argument('--disable-gpu')
             chrome_options.add_argument('--window-size=1920,1080')
-            chrome_options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36')
             
-            # Anti-detección
+            # Rotación de User-Agent
+            user_agent = random.choice(USER_AGENTS)
+            chrome_options.add_argument(f'--user-agent={user_agent}')
+            
+            # Anti-detección mejorada
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
             chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-plugins')
+            chrome_options.add_argument('--disable-images')
+            chrome_options.add_argument('--disable-javascript')
+            chrome_options.add_argument('--disable-web-security')
+            chrome_options.add_argument('--allow-running-insecure-content')
+            
+            # Preferencias adicionales
+            prefs = {
+                "profile.default_content_setting_values": {
+                    "notifications": 2,
+                    "geolocation": 2,
+                    "media_stream": 2
+                }
+            }
+            chrome_options.add_experimental_option("prefs", prefs)
             
             self.driver = webdriver.Chrome(options=chrome_options)
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            self.wait = WebDriverWait(self.driver, 10)
+            self.driver.execute_script("Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]})")
+            self.driver.execute_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
+            self.wait = WebDriverWait(self.driver, 15)
             
             logging.info("✅ WebDriver configurado correctamente")
             return True
@@ -70,8 +92,13 @@ class HybridCiesScraper:
             logging.error(f"Error al configurar WebDriver: {e}")
             return False
     
-    def random_delay(self, min_seconds=1, max_seconds=3):
-        """Delay aleatorio para simular comportamiento humano"""
+    def random_delay(self, min_seconds=None, max_seconds=None):
+        """Delay aleatorio mejorado para simular comportamiento humano"""
+        if min_seconds is None:
+            min_seconds = MIN_DELAY
+        if max_seconds is None:
+            max_seconds = MAX_DELAY
+            
         delay = random.uniform(min_seconds, max_seconds)
         time.sleep(delay)
     
@@ -100,7 +127,7 @@ class HybridCiesScraper:
         try:
             logging.info("🌐 Navegando a la página de inicio...")
             self.driver.get(TARGET_URL)
-            self.random_delay(2, 4)
+            self.random_delay(3, 6)  # Delay más largo al cargar página
             
             # Verificar si estamos en página de error
             current_url = self.driver.current_url
@@ -109,6 +136,7 @@ class HybridCiesScraper:
                 return self.handle_error_page()
             
             logging.info("🔍 Buscando enlace de Visitantes para Islas Cíes...")
+            self.random_delay(2, 4)  # Delay antes de buscar elementos
             
             # Buscar elementos que contengan "Visitantes" y "Cíes"
             visitantes_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Visitantes')]")
@@ -128,11 +156,14 @@ class HybridCiesScraper:
                 logging.error("❌ No se encontró elemento clickeable de Visitantes")
                 return False
             
+            # Delay antes del clic
+            self.random_delay(2, 4)
+            
             # Hacer clic en Visitantes
             if not self.human_like_click(target_element):
                 return False
             
-            self.random_delay(2, 4)
+            self.random_delay(3, 6)  # Delay más largo después del clic
             
             # Verificar que llegamos a la página de solicitud
             current_url = self.driver.current_url
